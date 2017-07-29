@@ -260,11 +260,18 @@ func Printf(format string, a ...interface{}) {
 func Print(a ...interface{}) {
 	Default.Print(a...)
 }
+
+// Fatal is equivalent to l.Print() followed by a call to os.Exit(1).
 func Fatal(a ...interface{}) {
 	Default.Error(a...)
 	panic(fmt.Sprint(a...))
 }
 
+// Fatalf is equivalent to l.Printf() followed by a call to os.Exit(1).
+func Fatalf(format string, a ...interface{}) {
+	Default.Errorf(format, a...)
+	panic(fmt.Sprintf(format, a...))
+}
 func V(level int) InfoLogger {
 	return New(level, "")
 }
