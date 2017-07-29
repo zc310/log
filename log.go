@@ -53,6 +53,7 @@ var (
 	maxSize    int    = 30
 	maxBackups int    = 0
 	maxAge     int    = 7
+	compress   bool   = true
 )
 
 type Write struct {
@@ -208,6 +209,7 @@ func newOut(level int, name, prefix string) *Write {
 		MaxSize:    maxSize,
 		MaxBackups: maxBackups,
 		MaxAge:     maxAge,
+		Compress:   compress,
 	}}
 }
 func SetWriter(level int, prefix string, info, error io.Writer) {
