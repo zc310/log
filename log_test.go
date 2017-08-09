@@ -20,6 +20,7 @@ func TestLog_Print(t *testing.T) {
 
 	tmp.V(2).Print("abc")
 	tmp.Error("abc")
+	Rotate()
 
 }
 func BenchmarkDummyLogger(b *testing.B) {
