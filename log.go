@@ -83,6 +83,16 @@ type Formatter interface {
 func (p Write) Write(b []byte) (n int, err error) {
 	return p.out.Write(b)
 }
+func (p Write) Rotate() {
+	if w, ok := p.out.(*lumberjack.Logger); ok {
+		w.Rotate()
+	}
+}
+func (p Write) Close() {
+	if w, ok := p.out.(*lumberjack.Logger); ok {
+		w.Close()
+	}
+}
 func SetDefault(v Logger) {
 	log = v
 }
@@ -200,19 +210,14 @@ func (p Log) Error(args ...interface{}) {
 // Close closes the all logfile.
 func Close() {
 	for _, w := range logOut {
-		if b, ok := w.out.(*lumberjack.Logger); ok {
-			b.Close()
-		}
+		w.Close()
 	}
 }
 
 // Rotate closes All files, moves it aside with a timestamp in the name,
 func Rotate() {
-	for k, w := range logOut {
-		fmt.Println(k)
-		if b, ok := w.out.(*lumberjack.Logger); ok {
-			b.Rotate()
-		}
+	for _, w := range logOut {
+		w.Rotate()
 	}
 }
 
