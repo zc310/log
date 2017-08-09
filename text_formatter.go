@@ -6,19 +6,21 @@ import (
 	"io"
 )
 
-type TextFormatter struct{}
+type TextFormatter struct {
+	pool bytebufferpool.Pool
+}
 
-func (f *TextFormatter) Format(entry *Entry, w io.Writer) error {
+func (p *TextFormatter) Format(entry *Entry, w io.Writer) error {
 	b, err := json.Marshal(entry.Message)
 	if err != nil {
 		return err
 	}
-	buf := bytebufferpool.Get()
+	buf := p.pool.Get()
 	buf.Write([]byte(entry.Time))
 	buf.Write([]byte("\t"))
 	buf.Write(b)
 	buf.Write([]byte("\n"))
 	_, err = w.Write(buf.B)
-	bytebufferpool.Put(buf)
+	p.pool.Put(buf)
 	return err
 }

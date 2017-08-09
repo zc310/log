@@ -45,19 +45,20 @@ type Logger interface {
 }
 
 var (
+	pid        = os.Getpid()
+	program    = filepath.Base(os.Args[0])
 	logLevel   int
-	Default    Logger
+	log        Logger
 	logOut     = make(map[string]*Write)
 	lock       sync.Mutex
 	logPath    string = filepath.Join(os.TempDir(), "logs")
 	maxSize    int    = 30
 	maxBackups int    = 0
 	maxAge     int    = 7
-	compress   bool   = true
 )
 
 type Write struct {
-	w io.Writer
+	out io.Writer
 }
 
 type Log struct {
@@ -80,15 +81,29 @@ type Formatter interface {
 }
 
 func (p Write) Write(b []byte) (n int, err error) {
-	return p.w.Write(b)
+	return p.out.Write(b)
 }
 func SetDefault(v Logger) {
-	Default = v
+	log = v
 }
 func SetLevel(v int) {
 	logLevel = v
 }
+
+// SetPath Set the log save path
 func SetPath(s string) {
+	for _, w := range logOut {
+		if lj, ok := w.out.(*lumberjack.Logger); ok {
+			w.out = &lumberjack.Logger{
+				Filename:   filepath.Join(s, strings.TrimPrefix(lj.Filename, logPath)),
+				MaxSize:    lj.MaxSize,
+				MaxBackups: lj.MaxBackups,
+				MaxAge:     lj.MaxAge,
+				Compress:   lj.Compress,
+			}
+			lj.Close()
+		}
+	}
 	logPath = s
 }
 func (p Log) V(level int) InfoLogger {
@@ -100,7 +115,7 @@ func (p Log) NewWithPrefix(prefix string) Logger {
 }
 
 func init() {
-	Default = New(0, "")
+	SetDefault(New(0, ""))
 }
 
 func New(level int, prefix string) *Log {
@@ -165,6 +180,9 @@ func (p Log) Output(w io.Writer, a ...interface{}) {
 		p.pool.Put(entry)
 	}
 }
+
+// Printf calls l.Output to print to the logger.
+// Arguments are handled in the manner of fmt.Printf.
 func (p Log) Printf(format string, a ...interface{}) {
 	p.Outputf(p.info, format, a...)
 }
@@ -179,17 +197,20 @@ func (p Log) Error(args ...interface{}) {
 	p.Output(p.err, args...)
 }
 
+// Close closes the all logfile.
 func Close() {
 	for _, w := range logOut {
-		if b, ok := w.w.(*lumberjack.Logger); ok {
+		if b, ok := w.out.(*lumberjack.Logger); ok {
 			b.Close()
 		}
 	}
 }
 
+// Rotate closes All files, moves it aside with a timestamp in the name,
 func Rotate() {
-	for _, w := range logOut {
-		if b, ok := w.w.(*lumberjack.Logger); ok {
+	for k, w := range logOut {
+		fmt.Println(k)
+		if b, ok := w.out.(*lumberjack.Logger); ok {
 			b.Rotate()
 		}
 	}
@@ -200,19 +221,21 @@ func newOut(level int, name, prefix string) *Write {
 	filename = append(filename, logPath)
 	filename = append(filename, strings.Split(prefix, ".")...)
 	if level == 0 {
-		filename = append(filename, fmt.Sprintf("%s.log", name))
+		filename = append(filename, fmt.Sprintf("%s_%s-%d.log", program, name, pid))
 	} else {
-		filename = append(filename, fmt.Sprintf("%s_%.2d.log", name, level))
+		filename = append(filename, fmt.Sprintf("%s_%s_%.2d-%d.log", program, name, level, pid))
 	}
 	return &Write{&lumberjack.Logger{
 		Filename:   filepath.Join(filename...),
 		MaxSize:    maxSize,
 		MaxBackups: maxBackups,
 		MaxAge:     maxAge,
-		Compress:   compress,
+		Compress:   true,
 	}}
 }
-func SetWriter(level int, prefix string, info, error io.Writer) {
+
+// SetOutput sets the output destination for the logger.
+func SetOutput(level int, prefix string, info, error io.Writer) {
 	lock.Lock()
 	defer lock.Unlock()
 	var (
@@ -222,13 +245,13 @@ func SetWriter(level int, prefix string, info, error io.Writer) {
 
 	key = fmt.Sprintf("%d_info_%s", level, prefix)
 	if out = logOut[key]; out != nil {
-		out.w = info
+		out.out = info
 	} else {
 		logOut[key] = &Write{info}
 	}
 	key = fmt.Sprintf("%d_error_%s", level, prefix)
 	if out = logOut[key]; out != nil {
-		out.w = error
+		out.out = error
 	} else {
 		logOut[key] = &Write{error}
 	}
@@ -245,33 +268,33 @@ func getOut(level int, name, prefix string) *Write {
 
 }
 func Infof(format string, a ...interface{}) {
-	Default.Printf(format, a...)
+	log.Printf(format, a...)
 }
 func Info(a ...interface{}) {
-	Default.Print(a...)
+	log.Print(a...)
 }
 func Errorf(format string, a ...interface{}) {
-	Default.Errorf(format, a...)
+	log.Errorf(format, a...)
 }
 func Error(a ...interface{}) {
-	Default.Error(a...)
+	log.Error(a...)
 }
 func Printf(format string, a ...interface{}) {
-	Default.Printf(format, a...)
+	log.Printf(format, a...)
 }
 func Print(a ...interface{}) {
-	Default.Print(a...)
+	log.Print(a...)
 }
 
 // Fatal is equivalent to l.Print() followed by a call to os.Exit(1).
 func Fatal(a ...interface{}) {
-	Default.Error(a...)
+	log.Error(a...)
 	panic(fmt.Sprint(a...))
 }
 
 // Fatalf is equivalent to l.Printf() followed by a call to os.Exit(1).
 func Fatalf(format string, a ...interface{}) {
-	Default.Errorf(format, a...)
+	log.Errorf(format, a...)
 	panic(fmt.Sprintf(format, a...))
 }
 func V(level int) InfoLogger {
